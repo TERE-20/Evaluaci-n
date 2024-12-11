@@ -24,9 +24,7 @@ def detect(ws):
         if message is None:
             break
 
-        # Si se recibe una imagen base64 desde el cliente
         if isinstance(message, str):
-            # Decodificar la imagen base64
             img_data = base64.b64decode(message)
             img_array = np.frombuffer(img_data, np.uint8)
             img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
