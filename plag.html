@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clasificación de Plagas</title>
+    <style>
+        body {
+            background: linear-gradient(to right, rgb(232, 197, 255), rgb(212, 148, 255));
+            font-family: Arial, sans-serif;
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .row {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px;
+        }
+        .column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        video, img {
+            max-width: 80%;
+            margin: 20px;
+            border: 2px solid #555;
+        }
+        input[type="file"] {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Clasificación de Plagas</h1>
+
+    <div class="column">
+        <h2>Cámara en Tiempo Real</h2>
+        <video id="cameraFeed" autoplay playsinline style="display: none;"></video>
+        <button id="startDetection">Iniciar Detección</button>
+        <button id="stopDetection" style="display:none;">Detener Detección</button>
+    </div>
+
+    <div class="column">
+        <h2>Seleccionar una Imagen</h2>
+        <input type="file" id="imageUpload" accept="image/*">
+        <img id="uploadedImage" alt="Imagen Seleccionada" style="max-width: 100%; display:none;">
+        <button id="classifyImageButton" style="display:none;">Clasificar Imagen</button>
+        
+        <h3>Imagen de Detección:</h3>
+        <img id="detectedImage" alt="Detección YOLO" style="display:none;">
+    </div>
+
+    <script>
+        const video = document.getElementById('cameraFeed');
+        const detectedImage = document.getElementById('detectedImage');
+        const startButton = document.getElementById('startDetection');
+        const stopButton = document.getElementById('stopDetection');
+        const imageUpload = document.getElementById('imageUpload');
+        const uploadedImage = document.getElementById('uploadedImage');
+        const classifyImageButton = document.getElementById('classifyImageButton');
+        let detectionInterval;
+
+        // Acceso a la camara
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then((stream) => {
+                video.srcObject = stream;
+            })
+            .catch((err) => {
+                console.error("Error al acceder a la cámara: ", err);
+            });
+
+        // WebSocket para la deteccion en tiempo real
+        const socket = new WebSocket('ws://localhost:5000/detect');
+
+        socket.onmessage = (event) => {
+            const blob = new Blob([event.data], { type: 'image/jpeg' });
+            detectedImage.src = URL.createObjectURL(blob);
+            detectedImage.style.display = 'block';
+        };
+
+        // Mostrar la cámara cuando se preciona Iniciar Detección
+        startButton.addEventListener('click', () => {
+            video.style.display = 'block'; // Mostrar el video
+            detectionInterval = setInterval(() => {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        socket.send(blob);
+                    }
+                }, 'image/jpeg');
+            }, 100); 
+            startButton.style.display = 'none';
+            stopButton.style.display = 'block';
+        });
+
+        // Detener la detección y ocultar la camara
+        stopButton.addEventListener('click', () => {
+            clearInterval(detectionInterval);
+            video.style.display = 'none'; // Ocultar el video
+            startButton.style.display = 'block';
+            stopButton.style.display = 'none';
+        });
+
+        // Función para manejar la carga de la imagen
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    uploadedImage.src = e.target.result; // Cargar la imagen
+                    classifyImageButton.style.display = 'block'; // Mostrar el botón de clasificar
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Función para clasificar la imagen
+        classifyImageButton.addEventListener('click', () => {
+            uploadedImage.style.display = 'block'; // Mostrar la imagen seleccionada
+            const imageData = uploadedImage.src.split(',')[1]; // Obtener los datos base64 de la imagen
+            socket.send(imageData); // Enviar la imagen al servidor para clasificarla
+        });
+    </script>
+</body>
+</html>
+
+
+
